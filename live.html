@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<title>LiveLingo — 演講投影字幕</title>
+<style>
+  :root {
+    color-scheme: dark;
+    /* Fallbacks before live.js applies the saved size — keep in sync with the
+       "md" entry of FONT_SIZES in live.js. */
+    --orig-size: 26px;
+    --trans-size: 45px;
+    /* Empty space kept below the newest line; larger value = subtitles sit
+       higher. Set from the "字幕位置" control (SUBTITLE_POSITIONS in live.js). */
+    --bottom-space: 18vh;
+    /* Typeface + weight of the subtitle text — see the "字型" control.
+       黑體 = sans (default), 明體 = Chinese serif, the 細明體 family. */
+    --subtitle-font: -apple-system, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    --trans-weight: 600;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: #000;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---- Control bar ---- */
+  #bar {
+    display: flex;
+    /* Bottom-align: the labelled dropdowns are two-row blocks (label above the
+       select) while the switch and buttons are single-row, so centring would
+       push the selects visually lower than the buttons. */
+    align-items: flex-end;
+    gap: 14px;
+    padding: 10px 16px;
+    background: #0d0d10;
+    border-bottom: 1px solid #1e1e24;
+    flex-wrap: wrap;
+  }
+  #bar.hidden { display: none; }
+  #bar h1 {
+    font-size: 14px;
+    margin: 0 auto 0 0;
+    color: #cfcfe0;
+    font-weight: 600;
+    align-self: center;
+  }
+  .ctrl { display: flex; flex-direction: column; gap: 2px; }
+  .ctrl label { font-size: 10px; color: #7a7a86; }
+
+  /* One shared control height keeps every bar element on one baseline. */
+  #bar select, #bar button, #bar .switch { height: 30px; }
+
+  select {
+    padding: 0 8px;
+    border-radius: 6px;
+    border: 1px solid #2c2c36;
+    background: #1a1b21;
+    color: #fff;
+    font-size: 12px;
+    max-width: 220px;
+  }
+  .switch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #cfcfe0;
+    cursor: pointer;
+    user-select: none;
+  }
+  .switch input { width: 16px; height: 16px; }
+  button {
+    padding: 0 14px;
+    border: none;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    background: #4f46e5;
+    color: #fff;
+  }
+  button.stop { background: #dc2626; }
+  button.ghost { background: #1a1b21; border: 1px solid #2c2c36; color: #cfcfe0; font-weight: 500; }
+  button:disabled { opacity: 0.6; cursor: default; }
+
+  #status {
+    padding: 4px 16px;
+    font-size: 11px;
+    color: #7a7a86;
+    background: #0a0a0d;
+    border-bottom: 1px solid #16161b;
+    flex: 0 0 auto;
+  }
+  #status.active { color: #7CFC9A; }
+  #status.error { color: #ff8a8a; }
+  #status.hidden { display: none; }
+
+  /* ---- Columns ---- */
+  #stage {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+  .col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border-right: 1px solid #16161b;
+  }
+  .col:last-child { border-right: none; }
+  .col.inactive { opacity: 0.28; }
+
+  /* Fixed identity colour per side, so the audience can be told once
+     ("中文字幕看藍色那邊") and never has to read the direction again.
+     Both columns stay at constant brightness on purpose: an earlier version
+     lit up whichever side was being spoken, and the constant flickering was
+     tiring to watch on a big screen. */
+  #colEn { --accent: #5b9dff; }  /* outputs 中文  — for the audience */
+  #colZh { --accent: #34d399; }  /* outputs English — for the speaker */
+
+  /* Single-direction (talk) mode: no split — one centered full-width column. */
+  #stage.single #colZh { display: none; }
+  #stage.single #colEn { border-right: none; }
+  #stage.single .col-head { display: none; }
+  /* Single mode: text is LEFT-aligned (ragged-right reads far better than centred
+     when lines vary in length) but the whole block is centred on screen and
+     capped to a comfortable measure, so it never hugs the edges. */
+  #stage.single .col-body {
+    align-items: center;
+    text-align: left;
+    /* Wider than before, but never flush to the edge — a little breathing room
+       stops the text touching the bezel on a projector. */
+    padding-left: max(2.5vw, 24px);
+    padding-right: max(2.5vw, 24px);
+  }
+  #stage.single .lines,
+  #stage.single .interim {
+    width: 100%;
+    max-width: 1750px;
+  }
+  #stage.single .lines { align-items: stretch; }
+
+  .col-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 20px;
+    background: #0b0b0e;
+    border-bottom: 2px solid #16161b;
+    flex: 0 0 auto;
+  }
+
+  /* Output language is the main label — no arrow to parse. The direction note
+     below it is written in that same reader's language. */
+  .head-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .head-lang {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    line-height: 1.15;
+  }
+  .head-sub {
+    font-size: 13px;
+    font-weight: 500;
+    color: #6f6f7e;
+    line-height: 1.2;
+  }
+
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #3a3a44;
+    flex: 0 0 auto;
+  }
+  /* Steady (never animated) status light: identity colour when connected. */
+  .col.live .dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  /* Paused wins over live: amber dot so the operator can see it at a glance. */
+  .col.paused .dot { background: #e0a44a; box-shadow: 0 0 8px #e0a44a; }
+
+  /* Per-column pause/resume control for the operator. Sized to be an easy target
+     in a dark room, mid-event. */
+  .pause-btn {
+    margin-left: auto;
+    flex: 0 0 auto;
+    height: 38px;
+    min-width: 62px;
+    padding: 0 14px;
+    border-radius: 7px;
+    border: 1px solid #2c2c36;
+    background: #1a1b21;
+    color: #cfcfe0;
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .pause-btn:hover { background: #26272f; }
+  .col.paused .pause-btn {
+    background: #e0a44a;
+    border-color: #e0a44a;
+    color: #17181c;
+  }
+  .paused-tag {
+    flex: 0 0 auto;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0;
+    color: #e0a44a;
+    display: none;
+  }
+  .col.paused .paused-tag { display: inline; }
+
+  .col-body {
+    flex: 1;
+    overflow-y: auto;
+    /* The bottom padding is deliberate: when scrolled to the end it leaves empty
+       space below the newest line, so the line the audience is reading sits
+       higher up instead of down at the bottom edge. Adjustable — see
+       --bottom-space. */
+    padding: 18px 14px var(--bottom-space);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .col-body::-webkit-scrollbar { width: 8px; }
+  .col-body::-webkit-scrollbar-thumb { background: #26262e; border-radius: 4px; }
+
+  /* Clean mode: translation only. The source text and the in-progress line are
+     both untranslated, so hiding the original hides them together. */
+  #stage.hide-original .line-original,
+  #stage.hide-original .interim {
+    display: none;
+  }
+
+  /* Finalized lines stack here; the interim line follows them inside the same
+     scroll area so in-progress speech appears right under the previous sentence. */
+  .lines {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* Left bar groups an original with its translation. Deliberately neutral grey:
+     the accent colours already live in the header, and colouring every bar too
+     made the transcript noisy. */
+  .line {
+    border-left: 3px solid rgba(255, 255, 255, 0.22);
+    padding-left: 14px;
+    animation: fade 0.2s ease;
+  }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  /* Subtitle text follows the chosen typeface; the control bar keeps the UI font. */
+  .line-original,
+  .line-translated,
+  .interim {
+    font-family: var(--subtitle-font);
+  }
+  .line-original {
+    font-size: var(--orig-size);
+    color: rgba(255,255,255,0.5);
+    line-height: 1.4;
+    margin-bottom: 4px;
+  }
+  .line-translated {
+    font-size: var(--trans-size);
+    font-weight: var(--trans-weight);
+    line-height: 1.4;
+  }
+
+  /* Chinese has no word spaces, so a little extra tracking helps at projection
+     sizes. Applied only where the text is actually Chinese: the left column's
+     translation, and the right column's source. */
+  #colEn .line-translated,
+  #colZh .line-original,
+  #colZh .interim {
+    letter-spacing: 0.04em;
+  }
+
+  /* English runs much wider than Chinese for the same content and stays legible
+     at a smaller size, so every English element is scaled down from the shared
+     font-size setting. English here = the left column's source and the right
+     column's translation. */
+  #colZh .line-translated {
+    font-size: calc(var(--trans-size) * 0.72);
+  }
+  #colEn .line-original,
+  #colEn .interim {
+    font-size: calc(var(--orig-size) * 0.85);
+  }
+  .interim {
+    font-size: calc(var(--orig-size) + 2px);
+    font-style: italic;
+    color: rgba(255,255,255,0.4);
+    line-height: 1.4;
+    /* Fainter bar keeps the in-progress line aligned with the finalized ones. */
+    border-left: 3px solid rgba(255, 255, 255, 0.1);
+    padding-left: 14px;
+  }
+  /* Collapse entirely when empty so the parent's flex gap doesn't leave a hole. */
+  .interim:empty { display: none; }
+
+  .hint {
+    color: #4a4a55;
+    font-size: 16px;
+    text-align: center;
+    margin-top: 30px;
+  }
+</style>
+</head>
+<body>
+  <div id="bar">
+    <h1 style="display:flex;align-items:center;gap:8px;"><img src="logo.png" alt="LiveLingo" style="height:22px;width:auto;">LiveLingo 演講投影字幕</h1>
+
+    <div class="ctrl">
+      <label for="device">音訊來源（mixer / 麥克風）</label>
+      <select id="device"><option value="">預設裝置</option></select>
+    </div>
+
+    <div class="ctrl">
+      <label for="sentenceMode">斷句長度</label>
+      <select id="sentenceMode" title="決定要等多久的停頓才算一句話講完">
+        <option value="short">短句（反應快）</option>
+        <option value="normal" selected>標準</option>
+        <option value="long">長句（較完整）</option>
+      </select>
+    </div>
+
+    <div class="ctrl">
+      <label for="subtitlePos">字幕位置</label>
+      <select id="subtitlePos" title="最新一句出現的高度">
+        <option value="low">靠下</option>
+        <option value="q3" selected>約 3/4（預設）</option>
+        <option value="q23">約 2/3</option>
+        <option value="mid">畫面中間（最高）</option>
+      </select>
+    </div>
+
+    <div class="ctrl">
+      <label for="fontStyle">字型</label>
+      <select id="fontStyle" title="字幕的字體與粗細">
+        <option value="sans-bold" selected>黑體・粗（預設）</option>
+        <option value="sans-light">黑體・細</option>
+        <option value="serif">明體（細明體）</option>
+        <option value="serif-bold">明體・粗</option>
+      </select>
+    </div>
+
+    <div class="ctrl">
+      <label for="fontSize">字體大小</label>
+      <select id="fontSize">
+        <option value="sm">小</option>
+        <option value="md" selected>中</option>
+        <option value="lg">大</option>
+        <option value="xl">特大</option>
+        <option value="xxl">極大</option>
+      </select>
+    </div>
+
+    <label class="switch"><input type="checkbox" id="showOriginal" /> 顯示原文</label>
+
+    <label class="switch"><input type="checkbox" id="bidir" /> 雙向模式（QA）</label>
+
+    <button id="fullscreenBtn" class="ghost" title="切換全螢幕">⛶ 全螢幕</button>
+    <button id="hideBarBtn" class="ghost" title="投影時隱藏設定列（把滑鼠移到畫面上方，或按 H 鍵可再顯示）">隱藏設定列(H)</button>
+    <button id="toggleBtn">開始</button>
+  </div>
+
+  <div id="status">尚未啟動。請先於外掛「設定」頁輸入 API Key，接著選擇音訊來源並按「開始」。</div>
+
+  <div id="stage" class="single">
+    <div class="col" id="colEn">
+      <div class="col-head">
+        <span class="dot"></span>
+        <div class="head-text">
+          <div class="head-lang">中文</div>
+          <div class="head-sub">英文發言的中文翻譯</div>
+        </div>
+        <span class="paused-tag">已暫停</span>
+        <button class="pause-btn" id="pauseEn" title="暫停／恢復這個翻譯方向">⏸</button>
+      </div>
+      <div class="col-body" id="bodyEn">
+        <div class="lines" id="linesEn">
+          <div class="hint">英文語音的中文翻譯會顯示在這裡</div>
+        </div>
+        <div class="interim" id="interimEn"></div>
+      </div>
+    </div>
+
+    <div class="col inactive" id="colZh">
+      <div class="col-head">
+        <span class="dot"></span>
+        <div class="head-text">
+          <div class="head-lang">English</div>
+          <div class="head-sub">English translation of Chinese speech</div>
+        </div>
+        <span class="paused-tag">已暫停</span>
+        <button class="pause-btn" id="pauseZh" title="暫停／恢復這個翻譯方向">⏸</button>
+      </div>
+      <div class="col-body" id="bodyZh">
+        <div class="lines" id="linesZh">
+          <div class="hint">開啟「雙向模式」後，中文語音的英文翻譯會顯示在這裡</div>
+        </div>
+        <div class="interim" id="interimZh"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="deepl.js"></script>
+  <script src="live.js"></script>
+</body>
+</html>

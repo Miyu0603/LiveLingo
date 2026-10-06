@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<title>LiveLingo — 麥克風即時翻譯</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: #101116;
+    color: #f0f0f0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 14px 20px;
+    background: #17181f;
+    border-bottom: 1px solid #26272f;
+    display: flex;
+    /* Bottom-align: the labelled dropdowns are two-row blocks (label above the
+       select) while the button is single-row, so centring would push the selects
+       visually lower than the button. */
+    align-items: flex-end;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  header h1 {
+    font-size: 16px;
+    margin: 0;
+    margin-right: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    align-self: center;
+  }
+  .ctrl { display: flex; flex-direction: column; gap: 3px; }
+  .ctrl label { font-size: 11px; color: #9a9aa5; }
+
+  /* One shared control height keeps every interactive element on one baseline. */
+  select, #toggleBtn { height: 34px; }
+
+  select {
+    padding: 0 8px;
+    border-radius: 6px;
+    border: 1px solid #34343d;
+    background: #222329;
+    color: #fff;
+    font-size: 13px;
+  }
+  #toggleBtn {
+    padding: 0 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    background: #4f46e5;
+    color: #fff;
+  }
+  #toggleBtn.stop { background: #dc2626; }
+  #toggleBtn:disabled { opacity: 0.6; cursor: default; }
+
+  #status {
+    padding: 6px 20px;
+    font-size: 12px;
+    color: #9a9aa5;
+    background: #14151b;
+    border-bottom: 1px solid #26272f;
+  }
+  #status.active { color: #7CFC9A; }
+  #status.error { color: #ff8a8a; }
+
+  #transcript {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  /* Finalized lines stack here; the interim line follows them inside the same
+     scroll area so in-progress speech appears right under the previous sentence. */
+  #lines {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .line {
+    border-left: 3px solid #4f46e5;
+    padding-left: 12px;
+    animation: fadein 0.25s ease;
+  }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+  .line-original {
+    font-size: var(--orig-size, 15px);
+    color: rgba(255,255,255,0.55);
+    line-height: 1.45;
+    margin-bottom: 3px;
+  }
+  .line-translated {
+    font-size: var(--trans-size, 24px);
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  #interim {
+    font-size: calc(var(--orig-size, 15px) - 1px);
+    font-style: italic;
+    color: rgba(255,255,255,0.45);
+    padding-left: 15px;
+    line-height: 1.45;
+  }
+  #interim:empty { display: none; }
+
+  /* Chinese has no word spaces, so a little extra tracking helps readability.
+     Applied by JS only to text that actually contains CJK, since the language
+     pair here is user-selectable. */
+  .cjk { letter-spacing: 0.04em; }
+
+  .switch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    font-size: 13px;
+    color: #d3d3db;
+    cursor: pointer;
+    user-select: none;
+  }
+  .switch input { width: 16px; height: 16px; }
+
+  /* Clean mode: translation only. The source text and the in-progress line are
+     both untranslated, so hiding the original hides them together. */
+  body.hide-original .line-original,
+  body.hide-original #interim {
+    display: none;
+  }
+  .empty-hint {
+    color: #6b6b76;
+    font-size: 14px;
+    text-align: center;
+    margin-top: 40px;
+  }
+  a { color: #8ab4ff; }
+</style>
+</head>
+<body>
+  <header>
+    <h1><img src="logo.png" alt="LiveLingo" style="height:24px;width:auto;">LiveLingo 麥克風即時翻譯</h1>
+
+    <div class="ctrl">
+      <label for="sourceLang">原始語言</label>
+      <select id="sourceLang">
+        <option value="en">英文</option>
+        <option value="ja">日文</option>
+        <option value="ko">韓文</option>
+        <option value="zh-TW">繁體中文</option>
+        <option value="zh-CN">簡體中文</option>
+        <option value="es">西班牙文</option>
+        <option value="fr">法文</option>
+        <option value="de">德文</option>
+        <option value="id">印尼文</option>
+        <option value="vi">越南文</option>
+        <option value="th">泰文</option>
+      </select>
+    </div>
+
+    <div class="ctrl">
+      <label for="targetLang">翻譯成</label>
+      <select id="targetLang">
+        <option value="ZH-HANT">繁體中文</option>
+        <option value="ZH">簡體中文</option>
+        <option value="EN-US">英文（美式）</option>
+        <option value="JA">日文</option>
+        <option value="KO">韓文</option>
+        <option value="ES">西班牙文</option>
+        <option value="FR">法文</option>
+        <option value="DE">德文</option>
+      </select>
+    </div>
+
+    <div class="ctrl">
+      <label for="micSelect">麥克風</label>
+      <select id="micSelect">
+        <option value="">預設裝置</option>
+      </select>
+    </div>
+
+    <div class="ctrl">
+      <label for="fontSize">字體大小</label>
+      <select id="fontSize">
+        <option value="sm">小</option>
+        <option value="md" selected>中</option>
+        <option value="lg">大</option>
+      </select>
+    </div>
+
+    <label class="switch"><input type="checkbox" id="showOriginal" /> 顯示原文</label>
+
+    <button id="toggleBtn">開始聆聽</button>
+  </header>
+
+  <div id="status">尚未啟動。請先確認已在「設定」頁輸入 API Key。</div>
+
+  <div id="transcript">
+    <div id="lines">
+      <div class="empty-hint">按右上角「開始聆聽」後，麥克風收到的語音會即時轉成逐字稿並翻譯顯示於此。</div>
+    </div>
+    <div id="interim"></div>
+  </div>
+
+  <script src="deepl.js"></script>
+  <script src="mic.js"></script>
+</body>
+</html>

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<title>LiveLingo</title>
+<style>
+  body {
+    width: 300px;
+    font-family: -apple-system, "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    margin: 0;
+    padding: 14px 16px 16px;
+    background: #17181c;
+    color: #f0f0f0;
+  }
+  h1 {
+    font-size: 15px;
+    margin: 0 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .subtitle {
+    font-size: 12px;
+    color: #8f8f99;
+    margin: -6px 0 14px;
+    line-height: 1.5;
+  }
+  .field {
+    margin-bottom: 10px;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    color: #a9a9b3;
+    margin-bottom: 4px;
+  }
+  select {
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid #34343d;
+    background: #222329;
+    color: #fff;
+    font-size: 13px;
+  }
+  #status {
+    font-size: 12px;
+    margin: 10px 0;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: #222329;
+    color: #a9a9b3;
+  }
+  #status.active {
+    color: #7CFC9A;
+  }
+  #status.error {
+    color: #ff8a8a;
+  }
+  #toggleBtn {
+    width: 100%;
+    padding: 9px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    background: #4f46e5;
+    color: #fff;
+  }
+  #toggleBtn.stop {
+    background: #dc2626;
+  }
+  #toggleBtn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  .secondary-btn {
+    width: 100%;
+    margin-top: 8px;
+    padding: 8px;
+    border: 1px solid #34343d;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    background: #222329;
+    color: #e0e0e6;
+  }
+  .secondary-btn:hover {
+    background: #2b2c34;
+  }
+  .footer {
+    margin-top: 12px;
+    text-align: center;
+  }
+  .footer a {
+    font-size: 12px;
+    color: #8ab4ff;
+    text-decoration: none;
+  }
+</style>
+</head>
+<body>
+  <h1><img src="logo.png" alt="LiveLingo" style="height:24px;width:auto;">LiveLingo</h1>
+  <p class="subtitle">聆聽目前分頁播放的聲音，即時產生逐字稿並翻譯</p>
+
+  <div class="field">
+    <label for="sourceLang">聲音的原始語言（Deepgram 辨識）</label>
+    <select id="sourceLang">
+      <option value="en">英文</option>
+      <option value="ja">日文</option>
+      <option value="ko">韓文</option>
+      <option value="zh-TW">繁體中文</option>
+      <option value="zh-CN">簡體中文</option>
+      <option value="es">西班牙文</option>
+      <option value="fr">法文</option>
+      <option value="de">德文</option>
+      <option value="id">印尼文</option>
+      <option value="vi">越南文</option>
+      <option value="th">泰文</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="targetLang">翻譯成（DeepL）</label>
+    <select id="targetLang">
+      <option value="ZH-HANT">繁體中文</option>
+      <option value="ZH">簡體中文</option>
+      <option value="EN-US">英文（美式）</option>
+      <option value="JA">日文</option>
+      <option value="KO">韓文</option>
+      <option value="ES">西班牙文</option>
+      <option value="FR">法文</option>
+      <option value="DE">德文</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="maxLines">字幕保留句數</label>
+    <select id="maxLines">
+      <option value="1">1 句（只顯示最新）</option>
+      <option value="2" selected>2 句（保留上一句）</option>
+      <option value="3">3 句</option>
+      <option value="4">4 句</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="fontSize">字幕字體大小</label>
+    <select id="fontSize">
+      <option value="0">小</option>
+      <option value="1" selected>中</option>
+      <option value="2">大</option>
+    </select>
+  </div>
+
+  <div id="status">尚未啟動</div>
+
+  <button id="toggleBtn">開始聆聽並翻譯</button>
+
+  <button id="micPageBtn" class="secondary-btn">🎙️ 開啟麥克風翻譯頁面</button>
+
+  <button id="livePageBtn" class="secondary-btn">🖥️ 開啟演講投影字幕</button>
+
+  <div class="footer">
+    <a href="#" id="openOptions">設定 API Key</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "LiveLingo 即時字幕翻譯",
+  "version": "1.0.0",
+  "description": "擷取直播分頁聲音，即時產生逐字稿並翻譯，以可拖曳的浮動字幕顯示在網頁上。",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvNi24/WrlSaoO4+RIgVKqxasM9ny48xj7Qbh4jhqz0inU/aQuC4DwoC72kuu5KYe8j6z4ZWY8VQLlDGzGqrC23Vl2WT28ieoapBGxFnjpcbGHsIX8XrSAFZkF40Dl24TycHr0TlqoIrvKfvLiZHd1E0GLhQxF037NRizGsmoWJEU6+UPBewYM0gtdQK8pyoDyY5r4doJfhUaFRnVcKZFKnrb2K+xw+yS/dUYiEdxF8HiCW1fU2VIQM45MSs+150Euzq+Bx0Sc7p03Fnolt5vpD0w6GMFD+qxz4n9MDvyB8JMtQuzhDQgvp1ijYsOqQHDlxzEk7Cp7aWkA+UCcl7FvwIDAQAB",
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://api.deepgram.com/*",
+    "https://api-free.deepl.com/*",
+    "https://api.deepl.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

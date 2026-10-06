@@ -1,0 +1,178 @@
+#lct-overlay {
+  position: fixed;
+  left: 50%;
+  bottom: 8%;
+  transform: translateX(-50%);
+  z-index: 2147483647;
+  /* Fixed width, not content-driven: a box that resized with every subtitle made
+     the ✕ / A± buttons move around and hard to hit. */
+  width: min(80vw, 780px);
+  box-sizing: border-box;
+  background: rgba(20, 20, 24, 0.82);
+  color: #fff;
+  border-radius: 12px;
+  padding: 10px 16px 12px;
+  font-family: -apple-system, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  user-select: none;
+  cursor: default;
+  display: none;
+}
+
+#lct-overlay.lct-visible {
+  display: block;
+}
+
+#lct-overlay.lct-dragging,
+#lct-overlay.lct-resizing {
+  transition: none;
+}
+
+/* Grabbable strips on both side edges for width adjustment. Invisible until the
+   pointer is over the overlay, so they never distract during a stream. */
+.lct-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  cursor: ew-resize;
+  background: transparent;
+}
+
+#lct-resize-left { left: -3px; }
+#lct-resize-right { right: -3px; }
+
+#lct-overlay:hover .lct-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 3px;
+  height: 30px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+#lct-overlay .lct-resize-handle:hover::after {
+  background: rgba(255, 255, 255, 0.65);
+}
+
+#lct-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: grab;
+  margin-bottom: 4px;
+  opacity: 0.55;
+}
+
+#lct-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Full opacity on hover so the controls are clearly visible when aiming at them. */
+#lct-overlay:hover #lct-drag-handle {
+  opacity: 1;
+}
+
+#lct-drag-dots {
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+
+#lct-controls {
+  display: flex;
+  gap: 6px;
+}
+
+/* Roomy enough to hit reliably while a stream is playing. */
+.lct-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  color: #fff;
+  border-radius: 5px;
+  font-size: 12px;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 9px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.lct-btn:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+#lct-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lct-line {
+  transition: opacity 0.35s ease;
+}
+
+/* Newest sentence: full brightness */
+.lct-line-current {
+  opacity: 1;
+}
+
+/* Previous sentence: dimmed so it lingers without competing with the new one */
+.lct-line-prev {
+  opacity: 0.45;
+}
+
+.lct-line-original {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
+  margin-bottom: 2px;
+}
+
+.lct-line-translated {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+/* Chinese has no word spaces, so a little extra tracking helps readability.
+   Added by content.js only to text that actually contains CJK, since the target
+   language is user-selectable. */
+#lct-overlay .lct-cjk {
+  letter-spacing: 0.04em;
+}
+
+/* Live interim original text, shown while waiting for the translation */
+#lct-interim {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+  line-height: 1.4;
+  margin-top: 6px;
+  min-height: 1.4em;
+}
+
+#lct-interim:empty {
+  min-height: 0;
+  margin-top: 0;
+}
+
+#lct-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #ff8a8a;
+  display: none;
+}
+
+#lct-error.lct-visible {
+  display: block;
+}
+
+/* Font-size variants set from the popup */
+#lct-overlay.lct-size-sm .lct-line-translated { font-size: 16px; }
+#lct-overlay.lct-size-sm .lct-line-original { font-size: 12px; }
+#lct-overlay.lct-size-lg .lct-line-translated { font-size: 28px; }
+#lct-overlay.lct-size-lg .lct-line-original { font-size: 16px; }

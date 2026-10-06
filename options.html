@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<title>LiveLingo — 設定</title>
+<style>
+  body {
+    font-family: -apple-system, "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    max-width: 520px;
+    margin: 40px auto;
+    background: #17181c;
+    color: #f0f0f0;
+    padding: 0 20px;
+  }
+  h1 { font-size: 18px; }
+  p.hint { font-size: 12px; color: #a9a9b3; line-height: 1.6; }
+  a { color: #8ab4ff; }
+  .field { margin-bottom: 18px; }
+  label { display: block; font-size: 13px; margin-bottom: 6px; color: #d3d3db; }
+  input[type=text], input[type=password], select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #34343d;
+    background: #222329;
+    color: #fff;
+    font-size: 13px;
+  }
+  .radio-row { display: flex; gap: 16px; font-size: 13px; margin-top: 4px; }
+  button {
+    padding: 9px 18px;
+    border: none;
+    border-radius: 8px;
+    background: #4f46e5;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #saved {
+    margin-left: 12px;
+    font-size: 13px;
+    color: #7CFC9A;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  #saved.show { opacity: 1; }
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #34343d;
+    background: #222329;
+    color: #fff;
+    font-size: 13px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    line-height: 1.6;
+    resize: vertical;
+  }
+  button.secondary {
+    background: #222329;
+    border: 1px solid #34343d;
+    color: #d3d3db;
+    font-weight: 500;
+    margin-left: 8px;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  #glossaryStatus.ok { color: #7CFC9A; }
+  #glossaryStatus.error { color: #ff8a8a; }
+  #glossaryList { margin-top: 10px; }
+  .gl-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border: 1px solid #2c2c36;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    background: #1c1d23;
+  }
+  .gl-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .gl-meta { color: #8a8a96; white-space: nowrap; }
+  .gl-del {
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 5px;
+    background: #3a2326;
+    border: 1px solid #5c3034;
+    color: #ff9b9b;
+    cursor: pointer;
+  }
+  .gl-del:hover { background: #4a2b2f; }
+  .gl-entries {
+    margin: -2px 0 10px 12px;
+    padding: 8px 12px;
+    border-left: 2px solid #343743;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #c2c2cc;
+    line-height: 1.8;
+  }
+  .gl-entries-head {
+    color: #7f7f8c;
+    font-weight: 600;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+  <h1 style="display:flex;align-items:center;gap:8px;"><img src="logo.png" alt="LiveLingo" style="height:26px;width:auto;">LiveLingo — 設定</h1>
+
+  <div class="field">
+    <label for="deepgramApiKey">Deepgram API Key（逐字稿辨識）</label>
+    <input type="password" id="deepgramApiKey" placeholder="貼上你的 Deepgram API Key" />
+    <p class="hint">前往 <a href="https://console.deepgram.com/" target="_blank" rel="noopener">console.deepgram.com</a> 申請，新帳號通常有免費額度。</p>
+  </div>
+
+  <div class="field">
+    <label for="deeplApiKey">DeepL API Key（翻譯）</label>
+    <input type="password" id="deeplApiKey" placeholder="貼上你的 DeepL API Key" />
+    <p class="hint">前往 <a href="https://www.deepl.com/pro-api" target="_blank" rel="noopener">deepl.com/pro-api</a> 申請，Free 方案金鑰通常以 <code>:fx</code> 結尾。</p>
+    <div class="radio-row">
+      <label><input type="radio" name="deeplPlan" value="free" checked /> Free 方案</label>
+      <label><input type="radio" name="deeplPlan" value="pro" /> Pro 方案</label>
+    </div>
+  </div>
+
+  <button id="saveBtn">儲存設定</button>
+  <span id="saved">已儲存 ✓</span>
+
+  <h2 style="font-size:16px;margin-top:34px;">詞彙表（固定譯法）</h2>
+  <p class="hint">
+    指定專有名詞的固定翻譯，避免被音譯或誤譯。每行一組，格式為
+    <code>英文=中文</code>；以 <code>#</code> 開頭的行會被忽略。
+  </p>
+  <div class="field">
+    <textarea id="glossaryTerms" rows="7" spellcheck="false"
+      placeholder="udn=聯合報"></textarea>
+    <p class="hint">
+      改完要按下方按鈕才會送到 DeepL 生效。會建立<strong>一份</strong>詞彙表，
+      內含「英→中」與「中→英」兩個方向，供雙向模式使用。
+      <br>DeepL <strong>Free 方案只允許 1 份詞彙表、每個方向最多 5 組詞彙</strong>；
+      Pro 方案則無此限制。
+    </p>
+    <button id="buildGlossaryBtn">建立 / 更新詞彙表</button>
+    <button id="clearGlossaryBtn" class="secondary">停用詞彙表</button>
+    <button id="listGlossaryBtn" class="secondary">查看帳號詞彙表</button>
+    <p class="hint" id="glossaryStatus"></p>
+    <div id="glossaryList"></div>
+  </div>
+
+  <p class="hint" style="margin-top:28px;">
+    提醒：Netflix、Disney+ 等具備 DRM 保護的影音平台可能會阻擋分頁錄音功能，
+    此擴充功能主要適用於 YouTube、Twitch 等未加密音訊輸出的直播網站。
+    API 金鑰儲存在 <code>chrome.storage.sync</code>，會跟著你登入的 Google 帳號在各台電腦間同步（需開啟 Chrome 同步）；
+    除了 Google 帳號同步外，不會上傳至任何其他第三方伺服器。若你不希望金鑰同步，請關閉 Chrome 的擴充功能同步。
+  </p>
+
+  <script src="deepl.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

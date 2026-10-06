@@ -1,0 +1,42 @@
+# --- Secrets / credentials -------------------------------------------------
+# API keys live in chrome.storage.sync, never in files — but never commit these
+# even by accident (GIT-04).
+.env
+.env.*
+*.pem
+*.p12
+*.key
+
+# The private key that signs a .crx build. Committing it would let anyone
+# publish an update impersonating this extension.
+key.pem
+
+# --- OS / editor cruft -----------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+*.swp
+.idea/
+.vscode/
+
+# --- Local tool state ------------------------------------------------------
+# Machine-specific Claude Code permissions; CLAUDE.md and AGENTS.md ARE tracked.
+.claude/settings.local.json
+
+# --- Build / packaging output ----------------------------------------------
+*.crx
+*.zip
+dist/
+node_modules/
+
+# --- Large design source files ---------------------------------------------
+# Only logo.png and icons/ are needed at runtime; keep the heavy originals out
+# of the repo (the .psd alone is ~5 MB).
+*.psd
+*.ai
+*.sketch
+# Pattern, not exact names: new variants (去背 etc.) kept appearing and slipping
+# through. logo.png and icons/ are the files the extension actually loads.
+LiveLingo_Logo*
