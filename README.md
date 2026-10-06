@@ -1,72 +1,168 @@
-# LiveLingo — 即時字幕翻譯 Chrome 外掛
+# LiveLingo — 即時字幕翻譯
 
-擷取瀏覽器分頁（YouTube、Twitch 等直播網站）輸出的聲音，即時產生逐字稿（Deepgram）並翻譯（DeepL），以可拖曳的浮動字幕顯示在網頁上。
+> 聆聽現場或線上的聲音，即時產生逐字稿並翻譯，以雙語字幕呈現。
+> A Chrome extension (MV3) that turns live speech into real-time bilingual subtitles.
 
-## 架構
+為了一場**外籍學者來台演講**而做的工具。演講以英文進行、觀眾是中文聽眾，而 Q&A 時雙方要互相理解——
+需要**同時**處理「英文→中文」和「中文→英文」兩個方向。
+
+技術組成：**Deepgram**（即時語音辨識，WebSocket 串流）＋ **DeepL**（翻譯，REST）。
+純 JavaScript，無建置流程、無後端。
+
+---
+
+## 三種使用模式
+
+| 模式 | 音訊來源 | 畫面 | 適用情境 |
+|---|---|---|---|
+| **演講投影字幕** | 混音器 / 麥克風 | 全螢幕黑底投影頁 | 實體演講，字幕投到大螢幕 |
+| **麥克風翻譯** | 麥克風 | 一般視窗、可捲動逐字稿 | 會議、面對面對談 |
+| **分頁字幕** | 分頁音訊（`chrome.tabCapture`） | 網頁上可拖曳的浮動字幕 | YouTube、Twitch 等線上影音 |
+
+三者共用同一套音訊處理（`pcm-worklet.js`）與同一個 DeepL 用戶端（`deepl.js`）。
+
+### 演講投影模式
+
+- **單向模式**：單欄置中、限制行寬，純粹呈現翻譯
+- **雙向模式（QA）**：左右分割，左欄「English → 中文」、右欄「中文 → English」
+- 兩欄各有**獨立的暫停鍵**（快捷鍵 `L` / `R`），演講中可先關掉不需要的方向
+- 每欄固定識別色，開場說一句「中文看藍色那邊」觀眾就能鎖定
+- 可調：字幕位置、字型（黑體／明體）、字級（5 段，最大 90px）、是否顯示原文
+- 全螢幕、可隱藏設定列（`H`），投影畫面保持乾淨
+
+---
+
+## 開發中解決的問題
+
+這個專案的難點幾乎都不在「串 API」，而在串起來之後才會遇到的細節。
+
+### 1. 斷句：`is_final` 不等於「這句話說完了」
+
+Deepgram 的 `is_final` 只代表「**這一小段文字不會再變動**」，不代表句子結束。
+直接用它來送翻譯，會得到這種結果：
 
 ```
-popup.js  ──(使用者點擊「開始」)──▶  background.js (service worker)
-                                        │  chrome.tabCapture.getMediaStreamId()
-                                        ▼
-                              offscreen.html / offscreen.js
-                                  │ getUserMedia(streamId) 擷取分頁音訊
-                                  │ 同時接回 AudioContext.destination，維持喇叭正常出聲
-                                  │ AudioWorklet (pcm-worklet.js) 降頻成 16kHz PCM16
-                                  ▼
-                         WebSocket → Deepgram（即時逐字稿）
-                                  │ is_final 句子
-                                  ▼
-                              fetch → DeepL（翻譯）
-                                  │
-                                  ▼
-                 background.js 轉發 → content.js 浮動字幕 div（可拖曳）
+"The humans"  /  "have input."  /  "that"
 ```
 
-MV3 的 `tabCapture` 無法直接在 service worker 中處理 `MediaStream`，因此依官方建議的模式，
-由 background 取得 `streamId` 後交給一個隱藏的 **offscreen document** 實際做音訊擷取與 WebSocket 串流。
+每個碎片被**獨立送去翻譯**，語意全毀（`that` → 「那個」）。
 
-## 檔案說明
+改為：累積片段，**優先用標點符號斷句**，句尾未完成的部分留到下一段接續。
+`speech_final` 刻意不觸發送出——它在講者換氣時也會觸發，正是斷句錯亂的來源。
 
-| 檔案 | 用途 |
-|---|---|
-| `manifest.json` | MV3 設定，宣告 `tabCapture`、`offscreen`、`storage` 權限 |
-| `background.js` | service worker：取得分頁音訊串流 id、管理 offscreen document、轉發字幕/翻譯結果 |
-| `offscreen.html/js` | 實際的音訊擷取 + Deepgram WebSocket + DeepL 翻譯 |
-| `pcm-worklet.js` | AudioWorklet：把分頁音訊降頻為 16kHz 單聲道 PCM16，符合 Deepgram 要求 |
-| `content.js/css` | 注入頁面的浮動字幕 div，可拖曳、可調字體大小、可隱藏 |
-| `popup.html/js` | 點擊外掛圖示後的介面：選語言、字幕句數、字體大小、開始/停止、開啟麥克風頁面 |
-| `options.html/js` | 設定頁：輸入 Deepgram / DeepL API Key |
-| `mic.html/js` | 獨立分頁：擷取「電腦麥克風」的聲音，即時逐字稿並翻譯（與分頁字幕共用同一組 API Key） |
+```
+修正前：So those | two are memorable.
+修正後：So those two are memorable.
+```
 
-## 兩種使用模式
+另有安全閥（字數、秒數上限），避免講者完全不停頓時字幕卡住。
 
-1. **分頁字幕（浮動字幕）**：擷取「目前分頁播放的聲音」（YouTube、Twitch 等），字幕以可拖曳浮動框顯示在該網頁上。從外掛 popup 操作。
-2. **麥克風翻譯（獨立頁面）**：擷取「電腦麥克風」收到的聲音（例如現場演講、會議、面對面對話），在一個獨立分頁中即時顯示逐字稿與翻譯。從 popup 的「🎙️ 開啟麥克風翻譯頁面」按鈕進入；首次使用會跳出麥克風權限請求。
+### 2. 中文與英文的資訊密度不同
 
-## 安裝方式（開發者模式載入）
+字數上限原本兩個方向共用，結果「中翻英」那側產出的文字量是另一側的兩倍以上——
+**100 個中文字翻成英文可能變成 150～200 個英文字**。
 
-1. 打開 Chrome，前往 `chrome://extensions`
-2. 右上角開啟「開發人員模式」
-3. 點「載入未封裝項目」，選擇這個資料夾（`即時翻譯工具`）
-4. 點擴充功能圖示旁的「⋮」→「選項」，輸入你的 API Key：
-   - **Deepgram API Key**：至 [console.deepgram.com](https://console.deepgram.com/) 註冊，新帳號通常有免費額度
-   - **DeepL API Key**：至 [deepl.com/pro-api](https://www.deepl.com/pro-api) 申請，Free 方案的金鑰通常以 `:fx` 結尾（記得選對 Free/Pro）
-5. **分頁字幕**：開一個 YouTube 直播或 Twitch 分頁，點擴充功能圖示，選擇原始語言 / 翻譯目標語言，按「開始聆聽並翻譯」
-6. **麥克風翻譯**：在 popup 按「🎙️ 開啟麥克風翻譯頁面」，於新分頁選好語言後按「開始聆聽」，並允許麥克風權限
+改為依**來源語言**分別設定上限（中文來源的上限約為英文的一半），並讓英文字級等比縮小，
+左右兩欄的視覺重量才會平衡。
 
-## 使用限制與注意事項
+### 3. Deepgram 即時串流不支援中文 code-switching
 
-- **DRM 保護的網站無法擷取**：Netflix、Disney+ 等使用加密媒體輸出的網站會擋下 `tabCapture`，此功能主要適用於 YouTube、Twitch 這類未加密輸出音訊的網站。
-- **需要使用者手動點擊才能啟動**：`chrome.tabCapture` 要求使用者手勢（點擊擴充功能圖示），無法在背景自動啟動。
-- **API 為付費/有額度限制的服務**：Deepgram、DeepL 都是需要自行申請 Key 的第三方服務，實際使用會依用量計費，請留意各自的免費額度與計費規則。
-- **金鑰儲存位置**：API Key 儲存在 `chrome.storage.sync`，會跟著你登入的 Google 帳號在各台電腦間自動同步（需開啟 Chrome 同步）；除此之外不會上傳到任何其他第三方伺服器。若不希望同步，可關閉 Chrome 的擴充功能同步。UI 偏好（字幕位置、字體、句數等）仍存在各機器本機的 `chrome.storage.local`。本擴充功能本身不會攔截或紀錄你的音訊或文字內容。
-- **在其他電腦使用**：把整個資料夾複製過去，於 `chrome://extensions` 開發者模式「載入未封裝項目」即可；只要各台電腦登入同一個 Google 帳號並開啟 Chrome 同步，API Key 會自動帶過去，不需重新輸入。
-- **需要手動指定原始語言**：Deepgram 的自動語言偵測（`detect_language`）只支援「預錄音檔」，即時串流模式並不支援，因此必須在 popup 先選好直播的原始語言，字幕才會正常出現。
-- **語言支援**：Deepgram 的語言代碼與 DeepL 的語言代碼不完全相同，`popup.html` 中已預先對應好幾種常見語言；如需更多語言，可在 `popup.html` 的 `<select>` 中比照 [Deepgram 語言列表](https://developers.deepgram.com/docs/models-languages-overview) 與 [DeepL 語言列表](https://developers.deepl.com/docs/resources/supported-languages) 增加選項。
-- **喇叭仍會正常出聲**：`offscreen.js` 會把擷取到的音訊接回 `AudioContext.destination`，所以開字幕功能不會讓分頁靜音。
+`language=multi` 只涵蓋 en/es/fr/de/hi/ru/pt/ja/it/nl，**中文不在內**；
+即時串流也**不支援自動語言偵測**（`detect_language` 只對預錄音檔有效）。
 
-## 已知可再優化的方向
+所以雙向模式是**同時開兩條 WebSocket**，各自鎖定一種語言，共用同一份音訊。
+代價是「閒置的那一側會持續誤聽另一種語言」，再用信心分數過濾掉。
 
-- 目前每個瀏覽器視窗同時間只支援擷取一個分頁；如需同時看多個直播字幕，需要擴充 `activeSession` 為依 tabId 索引的多重 session。
-- Deepgram WebSocket 在閒置一段時間後會被伺服器關閉，`offscreen.js` 已加上簡單的自動重連機制（非使用者主動停止時），實務上長時間開台建議留意重連是否順暢。
-- 字幕目前僅在收到 `is_final` 句子後才顯示翻譯，若想要「原文即時滾動、翻譯稍微延遲」以外的呈現方式（例如逐字捲動字幕），可以在 `content.js` 的 `TRANSCRIPT_UPDATE` 處理邏輯調整顯示策略。
+### 4. 暫停時不能斷線
+
+操作人員需要在演講中暫時關掉某個方向。直接斷開 WebSocket 的話，恢復要等約 1 秒重連，會漏掉開頭幾個字。
+
+改為：**停止送音訊**（Deepgram 按音訊時長計費，不送就不計費），
+但每 5 秒送一個 `KeepAlive` 維持連線——恢復是瞬間的，暫停期間也不花錢。
+
+### 5. MV3 的 service worker 會被回收
+
+Service worker 閒置約 30 秒就會被 Chrome 終止，**記憶體變數全部歸零**；
+但 offscreen document 會繼續活著、繼續佔用分頁錄音。
+
+結果是：popup 以為沒在錄音，實際上還在，再按一次就得到
+`Cannot capture a tab with an active stream`，而且永遠解不開。
+
+修法：工作階段狀態改存 `chrome.storage.session`，並在每次開始前**強制釋放**既有的擷取。
+
+### 6. Content script 的生命週期
+
+manifest 宣告的 content script **只在網頁載入時注入**，所以擴充功能重新載入後，
+既有分頁裡是舊的（或根本沒有）腳本。而舊腳本的 `chrome.*` 呼叫會丟出
+`Extension context invalidated`。
+
+修法：改為按需注入，並把 content script 寫成**可重入**——
+新實例會先清除舊實例（移除 DOM 與所有監聽器），所有 `chrome.*` 呼叫都包上防護。
+
+### 7. 放大字體會讓自動捲動失效
+
+原本每次新增字幕時重新判斷「是否接近底部」。字級一放大，內容高度暴增、
+距離底部瞬間變遠，被誤判成「使用者自己捲上去了」，就不再跟隨最新字幕。
+
+修法：改成記住「**是否鎖定在底部**」的狀態，只有使用者**真的捲動**時才改變；
+字級、版面、視窗大小變化時則重新對齊。
+
+### 8. DeepL Free 方案只允許 1 份詞彙表
+
+詞彙表原本依方向建立兩份（英→中、中→英），在 Free 方案上**第一次就必定失敗**——
+建完第一份就已達上限。
+
+改用 **v3 多語詞彙表**：一份詞彙表內含多個方向的字典，**只算 1 份**。
+
+---
+
+## 翻譯品質的調校
+
+- **`context`**：把前兩句原文一併送給 DeepL 作為上下文。它不會被翻譯、**也不計費**，
+  但能讓代名詞與承接語氣翻得更準——逐句翻譯最容易丟失的就是這個。
+- **詞彙表**：固定專有名詞的譯法（例如 `udn` → `聯合報`），避免被音譯。
+  設定頁可直接編輯、查看與刪除。
+
+---
+
+## 安裝
+
+無建置流程，純 JS/HTML/CSS。
+
+1. `chrome://extensions` → 開啟「開發人員模式」
+2. 「載入未封裝項目」→ 選擇本資料夾
+3. 進「選項」頁，填入 **Deepgram** 與 **DeepL** 的 API Key
+   （兩者皆為第三方服務，需自行申請；金鑰存於 `chrome.storage.sync`，不會寫入任何檔案）
+
+```bash
+# 專案沒有測試框架，至少做語法與設定檔驗證
+for f in *.js; do node --check "$f"; done
+python3 -c "import json; json.load(open('manifest.json'))"
+```
+
+## 檔案結構
+
+```
+manifest.json     MV3 設定
+background.js     Service worker：分頁擷取、offscreen 生命週期、訊息轉送
+offscreen.js      分頁音訊擷取（MV3 的 service worker 無法持有 MediaStream）
+pcm-worklet.js    AudioWorklet：任意取樣率 → 16kHz 單聲道 PCM16
+deepl.js          共用的 DeepL 用戶端：翻譯、context、詞彙表管理
+live.html/js      演講投影頁
+mic.html/js       麥克風翻譯頁
+content.js/css    注入網頁的浮動字幕（可拖曳、可調寬、可重入）
+popup.html/js     外掛選單
+options.html/js   API Key 與詞彙表設定
+```
+
+## 已知限制
+
+- **DRM 網站無法擷取**：Netflix、Disney+ 等會阻擋 `tabCapture`；YouTube、Twitch 正常
+- **必須指定原始語言**：Deepgram 即時串流不支援自動語言偵測
+- **有延遲**：語音 → 辨識 → 翻譯約數秒，非零時差
+- **依賴付費 API**：Deepgram 與 DeepL 皆需自備金鑰，依用量計費
+- **尚無自動化測試**：系統高度依賴即時音訊與第三方 API，目前以實機驗證為主
+
+## 授權
+
+尚未指定。這是任職單位相關的專案，授權方式待確認後再補上 `LICENSE`。
